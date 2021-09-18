@@ -1,0 +1,249 @@
+---
+title: "Covid-19 phylogenetic tree program"
+author: "Karen Cebreros López"
+date: "4/28/2021"
+---
+
+##### R Markdown
+
+# Parte 1 (video):
+
+https://youtu.be/Y3iYFM2rPkI
+
+$$\\[.5in]$$
+
+# Parte 2:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+$$\\[.01in]$$
+
+## Carga las librerías necesarias:
+```{r}
+library(Biostrings)
+library(seqinr)
+library(adegenet)
+library(ape)
+library(ggtree)
+library(DECIPHER)
+library(viridis)
+library(ggplot2)
+library(ggmsa)
+library(reshape2)
+library(gridExtra)
+library(ggimage)
+```
+
+$$\\[.01in]$$
+
+## Secuencias de las variantes del Sars-CoV-2
+```{r}
+sars_cov2 <- c("MW932039", "MW555280", "MW592707", "MT470132", "MT786859", "MW332235", "LR991699", "MW786740", "MW375726", "LR963040", "MW633892", "MT256924", "MW273783", "MT994849", "MW315214", "MW030247", "MT517422", "MT324062", "LR883034", "MW309426");
+
+variants_names <- c("US_CA(B_1_429)", "India(B_6)", "Brazil(B_1_1_28)", "France(B_1_356)", "Turkey(B_1_1_181)", "Russia(B_1_1_424)", "UK(B_1_7)", "Italy(B_1_177_75)", "Spain(A_2)", "Germany(B_1_329)", "Argentina(N_3)", "Colombia(A_5)", "Poland(B_1_187)", "Iran(B_4)", "Mexico(B_1_558)", "Peru(C_32)", "Czechia(B_1_1)", "South_Africa(B_1)", "Netherlands(B_11)", "Canada(B_1_1_121)");
+
+sars_cov2_sequences <- read.GenBank(sars_cov2)
+
+for (i in 1:length(sars_cov2)) {
+  names(sars_cov2_sequences)[i] = variants_names[i];
+}
+
+write.dna(sars_cov2_sequences,  file ="sars_cov2_seqs.fasta", format = "fasta", append =
+FALSE, nbcol = 6, colsep = " ", colw = 10)
+```
+
+$$\\[.01in]$$
+
+## Cargamos las secuencias
+```{r}
+seqs_not_align <- readDNAStringSet("sars_cov2_seqs.fasta", format = "fasta")
+seqs_not_align
+```
+
+$$\\[.5in]$$
+
+## Calcula la longitud de las secuencias de cada variante
+```{r}
+for (i in 1:20) {
+  seq_name <- names(sars_cov2_sequences)[i];
+  print(paste("Tamaño de la variante", seq_name, ":", length(sars_cov2_sequences[[seq_name]])))
+}
+```
+
+$$\\[.5in]$$
+
+## Sacando la composición (en porcentaje) de nucleótidos de cada secuencia
+```{r}
+seqs_comp_df <- data.frame(Variants = variants_names)
+
+seqs_comp_df <- cbind(seqs_comp_df, alphabetFrequency(seqs_not_align, as.prob = T,baseOnly=T) * 100)
+names(seqs_comp_df)[names(seqs_comp_df) == "other"] <- "N"
+
+seqs_comp_df_m <- melt(seqs_comp_df, id.vars = 'Variants')
+names(seqs_comp_df_m)[names(seqs_comp_df_m) == "variable"] <- "Nucleotide"
+names(seqs_comp_df_m)[names(seqs_comp_df_m) == "value"] <- "Percentage"
+```
+
+$$\\[.01in]$$
+
+## Graficando las composiciones de las variantes
+```{r}
+par (margin(2,2,2,2))
+
+ggplot(seqs_comp_df_m, aes(Variants, Percentage)) +   
+  geom_bar(aes(fill = Nucleotide), position = "dodge", stat="identity") +  scale_fill_brewer(palette = 3) + theme_light() + theme(axis.text.x = element_text(angle = 30, size = 8, hjust = 1, vjust = 1)) + ggtitle("20 SARS-CoV-2 variants from the countries with most cases", subtitle = "Composition comparison")
+
+
+nucleotidePlot <- function(nucleotide, y0, color1, color2, title) {
+  p <- ggplot(seqs_comp_df, aes(x = Variants, y = nucleotide)) + geom_segment(aes(x = Variants, xend = Variants, y = y0, yend = nucleotide), color = color1) + geom_point(color = color2, size = 4) +  coord_flip() + theme_light() + theme(panel.grid.major = element_blank(), panel.border = element_blank(), axis.ticks.y = element_blank()) + xlab("Countries") + ylab("Percentage") + ggtitle(title)
+  
+  return(p)
+}
+
+p1 <- nucleotidePlot(seqs_comp_df$"G", 19.5, "skyblue", "cyan4", "Guanine comparison");
+p2 <- nucleotidePlot(seqs_comp_df$"A", 29, "brown1", "deeppink3", "Adenine comparison");
+p3 <- nucleotidePlot(seqs_comp_df$"T", 31.5, "chocolate2", "chocolate3", "Thymine comparison");
+p4 <- nucleotidePlot(seqs_comp_df$"C", 18.2, "chartreuse3", "forestgreen", "Cytosine comparison");
+
+grid.arrange(p1, p4, nrow = 1)
+grid.arrange(p2, p3, nrow = 1)
+```
+
+**Interpretación:** 
+En la primer gráfica, podemos ver una comparación a manera general, de la composición de las variantes de los 20 países con más casos de Sars-CoV-2 en el mundo, hasta la fecha. 
+En esta podemos ver que en si, que los porcentajes de los nucleótidos en las variantes parece ser muy parecida. Por ello, se agregaron otras 4 gráficas, en donde se examina más a fondo esto, separando los nucleótidos en gráficas propias.
+* En la primera, que habla sobre la guanina, podemos ver que el porcentaje aproximado en promedio de todas las variantes, ronda por ahí del 19.6%. Sin embargo, se puede ver que una de las variantes que menos contiene este nucleótido, es la de Reino Unido. Y de las que más contienen de esto, son de Colombia, Alemania, Polonia y España.
+* En la segunda, que habla sobre la citosina, tenemos un porcentaje promedio de su contenido, de aproximadamente 18.35%. Y así como con la gráfica anterior, tenemos que la variante de Reino Unido es de las que menos cuenta con este nucleótido, mientras que las variantes de Argentina, Irán, Polonia y España, son las que más contienen de este.
+* En la tercer gráfica, que habla sobre la adenina, tenemos un porcentaje promedio más elevado que los pasados. En este caso, tenemos un valor aproximado de adenina del 29.7% en las variantes. Y así mismo, aquí podemos ver que no hay mucha diferencia entre estas; pues entre la que menos contiene este nucleótido, a la que más contiene de este, hay aproximadamente un .5% de diferencia.
+* Finalmente, en la cuarta gráfica que habla sobre la timina, también podemos ver un porcentaje promedio mucho más alto que el de las primeras dos gráficas; ya que este, anda rondando por ahí del 32.1%.
+Aquí tampoco hay mucha diferencia de contenido entre las variantes, pero igual podemos observar que la que menos tiene es la de Reino Unido, mientras que la que más tiene, es la de Perú.
+
+Básicamente, lo que podemos rescatar del análisis de estas gráficas, es que en si, las variantes del SARS-CoV-2 propuestas en este trabajo, tienen un porcentaje menos de GC, que de AT. Pues podemos ver que de GC, hay un porcentaje menor al 50%.
+
+¿Qué significa exactamente esto?
+Bueno... pues así como se mencionó en ela parte 1 de la evidencia final, entre más bajo sea la cantidad de GC en estas, hace que se produzan secuencias de alta señal, hace que se disminuya la temperatura de fusión (Tm). Así mismo, esto hace que las hebras no sean tan resistentes a la desnaturalización, ya que no hay tantos puentes de hidrógeno (el tipo de enlace más resistente).
+
+Y ya para terminar con esta interpretación, podemos señalar algunas de las similitudes, diferencias y puntos importantes, que existen entre las variables de estos países:
+* La variante del país que cuenta con menos nucleótidos en las 4 últimas gráficas: Reino Unido. (Es importante mencionar aquí que en la primera gráfica, se puede ver que hay un porcentaje mayor de "N" (no se que nucleótidos son), en esta variable; lo que podría explicar porque aparentemente "tiene menos".)
+* Variantes de países que más se parecen en porcentajes de composición: Alemania-Colombia, Irán-España
+* Variantes de países que menos se parecen en porcentajes de composición: Argentina-Reino Unido 
+
+
+$$\\[.5in]$$
+
+## Alineamiento y creación del árbol:
+
+#### Alineamos las secuencias y guardamos el resultado en un nuevo archivo
+```{r}
+seqs_not_align <- OrientNucleotides(seqs_not_align)
+seqs_align <- AlignSeqs(seqs_not_align)
+
+writeXStringSet(seqs_align, file="sars_cov2_seqs_align.fasta")
+variants_aligned <- read.alignment("sars_cov2_seqs_align.fasta", format = "fasta")
+```
+
+$$\\[.01in]$$
+
+#### Creamos una matriz distancia y la imprimimos con formato de sombras
+```{r}
+par(margin(2,2,2,2))
+matriz_distancia <- dist.alignment(variants_aligned, matrix = "similarity")
+
+temp <- as.data.frame(as.matrix(matriz_distancia))
+table.paint(temp, cleg=0, clabel.row=.5, clabel.col=.5) + scale_color_viridis()
+```
+
+**Observaciones:** 
+Tenemos que entre más oscuros los colores, hay más distancia entre las variantes. Es decir, no se parecen tanto.
+Aquí también podemos observar, que hay algunas grandes similitudes entre las variantes de los siguientes países: Francia-Alemania y Sudáfrica-Alemania.
+Y por otro lado, algunas grandes diferencias entre las variantes de ciertos países, son: UK-US_CA, Irán-US_CA, Irán-UK, India-US_CA, Brasil-US_CA, Italia-UK, España-UK, Italia-Irán y algunos otros más.
+
+$$\\[.01in]$$
+
+#### Creamos el árbol con 'ape'
+```{r}
+variants_tree <- nj(matriz_distancia)
+class(variants_tree) 
+
+variants_tree <- ladderize(variants_tree)
+```
+
+$$\\[.01in]$$
+
+## Análisis jerárquico:
+
+```{r}
+par(margin(2,2,2,2))
+
+plot_virus <- ggtree(variants_tree) + xlim_tree(.03)
+
+data <- tidy_msa(seqs_not_align, 120, 135)
+
+plot_virus + geom_facet(geom = geom_msa, data = data, panel = 'Msa', color = "Shapely_AA") + theme_tree2() + theme(strip.background = element_rect(fill="lightcoral"))  + geom_tiplab(color = "tan3", size = 2.5)
+
+ggtree(variants_tree, layout="daylight", branch.length = 'none', color = "grey") + geom_tiplab(color = "darkmagenta", size = 1.4, hjust = .55)  + ggtitle("Sars-CoV-2 variants tree") + geom_phylopic(image = "81bc7804-4940-4fa5-a1ca-dd6c3a26aaa2", size = Inf, color="steelblue", alpha = .3)
+```
+
+**Interpretación:** 
+En la primer gráfica, podemos ver el árbol filogenético, junto a una comparación de un pedazo de las secuencias de las variantes. Mientras que en la segunda, podemos ver otro árbol filogenético, solo que sin raíz; el cual está hecho así, ya que como en este trabajo no se tomó a consideración la primera variante, no tenemos un punto de partida para las demás.
+
+Entonces... a partir de estos dos árboles, podemos observar las variantes que se agrupan y las que no. Por ejemplo, viendo el árbol de la segunda gráfica, tenemos el caso de de Canadá-Turquía-Argentina-República Checa que salen de una rama, el de México-Polonia-Sudáfrica-Alemania-Francia que salen de otra, el de Italia-US CA y el de Irán-India-Holanda-Colombia-España, que ambos salen de otra rama y por último, aquellos que están solos en ramas por aparte; como la de Reino Unido, Brasil, Rusia y Perú.
+Todo esto básicamente nos dice cuales son las variantes que más se parecen entre si. Lo cuál podemos de cierta manera verificar en la tabla de nucleótidos; donde en este caso estamos evaluando del 120 al 135. (Cabe mencionar, que en esta tabla también podemos llegar a notar cierto parecido entre una variante que se encuentre en una rama "sola", con algunas otras que forman parte de un grupo. Y eso es porque si nos vamos un poco más atrás en el árbol, vamos a observar que tienen un nodo en común, que quiere decir que aunque hay menos parecido, todas estas de cierta forma están en un mismo grupo. Por lo que a pesar de no ser iguales, si van a haber ciertas similitudes).
+
+Algo interesante que es importante resaltar aquí, es que en si no podemos decir que las variantes son muy diferentes entre poblaciones, ya que se puede ver que hay variantes muy similares, en poblaciones totalmente diferentes. Así como lo podemos ver en el caso del grupo de Irán-India-Holanda-Colombia-España, donde nos encontramos con poblaciones asíaticas, europeas e hispanas.
+Sin embargo, algo que también es importante resaltar, es que entre los grupos (ramas) de variantes, podemos observar que casi siempre hay dos o más países que están en un mismo continente. Es decir, en el caso de las variantes provenientes de Irán, India, Holanda, Colombia y España, tenemos que dos de estos están en el contienente Europeo, dos en el Asiático y uno en el Americano. Y si juntamos al otras dos variantes que provienen de la misma rama: la de Italia y US CA, entonces tenemos que en este gran grupo, hay tres variantes muy parecidas en Europa, dos en América y dos en Asia.
+Este comportamiento lo podemos ver igual en otros grupos, como el de México-Polonia-Sudáfrica-Alemania-Francia, donde tenemos 3 variantes similares en Europa, 1 en África y 1 en América.
+Entonces... lo que podemos concluir o rescatar de estas observaciones, es que en si es fácil que las variantes que provienen de un mismo continente, se parezcan más entre ellas y por ende, acaben en un mismo grupo o rama en este árbol.
+No obstante, es importante resaltar que para aquellos casos en donde tenemos varias variantes del mismo continente que no necesariamente se parecen tanto, hay que tomar en cuenta las diferentes fechas en donde las variantes fueron apareciendo. Ya que en caso de ser muy distantes, en cuestión de meses por ejemplo, nos podríamos encontrar con "grandes" diferencias en las secuencias de estas; lo que nos llevaría a agruparlas en ramas distintas.
+
+Por último, algo que vale la pena mencionar, es que como estamos hablando de puras variantes del mismo virus, que tienen una diferencia en aparición de meses, en realidad no nos vamos a encontrar condiferencias enormes, ya que todas estas, tienen bastante parecido entre si.
+Una manera de comprobar esto, es observando la matriz de sobras o también llamada "matriz distancia", puesta dos secciones arriba de esto. Al analizar los números que da, se puede ver que la mayor diferencia (entre la variante de US, CA y la de UK), es de 0.04; lo cual no es mucho.
+
+
+$$\\[.5in]$$
+
+## Referencias
+
+### Investigación:
+* Áine O'Toole, Emily Scher, Anthony Underwood, Ben Jackson, Verity Hill, JT McCrone, Chris Ruis, Khali Abu-Dahab, Ben Taylor, Corin Yeats, Louis du Plessis, David Aanensen, Eddie Holmes, Oliver Pybus, Andrew Rambaut. github.com/cov-lineages/pangolin](github.com/cov-lineages/pangolin
+
+* Johns Hopkins University and Medicine. (2021). COVID-19 Map. Johns Hopkins Coronavirus Resource Center. https://coronavirus.jhu.edu/map.html
+
+* NCBI. (2021). NCBI Virus. National Center of Biotechnology Information. https://www.ncbi.nlm.nih.gov/labs/virus/vssi/#/
+
+* Rambaut A, Holmes EC, O’Toole Á, Hill V, McCrone JT, Ruis C, du Plessis L & Pybus OG (2020) Nature Microbiology DOI:10.1038/s41564-020-0770-5
+
+* Sars-CoV-2:image:by CDC (Alissa Eckert; Dan Higgins)
+
+### Librerías utilizadas:
+* Baptiste Auguie (2017). gridExtra: Miscellaneous Functions for "Grid" Graphics. R package version 2.3. https://CRAN.R-project.org/package=gridExtra
+
+* Charif, D. and Lobry, J.R. (2007)
+
+* Guangchuang Yu (2020). ggimage: Use Image in 'ggplot2'. R package version 0.2.8.
+  https://CRAN.R-project.org/package=ggimage
+
+* Guangchuang Yu and Lang Zhou (2021). ggmsa: Plot Multiple Sequence Alignment using 'ggplot2'. R package version 0.0.6. https://CRAN.R-project.org/package=ggmsa
+
+* Guangchuang Yu. Using ggtree to visualize data on tree-like structures. Current Protocols in Bioinformatics, 2020, 69:e96. doi: 10.1002/cpbi.96
+
+* Hadley Wickham (2007). Reshaping Data with the reshape Package. Journal of Statistical Software, 21(12), 1-20. URL http://www.jstatsoft.org/v21/i12/.
+
+* H. Pagès, P. Aboyoun, R. Gentleman and S. DebRoy (2020). Biostrings: Efficient manipulation of biological strings. R package version 2.58.0.
+  https://bioconductor.org/packages/Biostrings
+  
+* H. Wickham. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York, 2016.
+
+* Jombart T. and Ahmed I. (2011) adegenet 1.3-1: new tools for the analysis of genome-wide SNP data. Bioinformatics. doi: 10.1093/bioinformatics/btr521
+  
+* Paradis E. & Schliep K. 2019. ape 5.0: an environment for modern phylogenetics and evolutionary analyses in R. Bioinformatics 35: 526-528.
+
+* Scott Chamberlain (2020). rphylopic: Get 'Silhouettes' of 'Organisms' from 'Phylopic'. R package version 0.3.0.
+  https://CRAN.R-project.org/package=rphylopic
+
+* Simon Garnier, Noam Ross, Robert Rudis, Antônio P. Camargo, Marco Sciaini, and Cédric Scherer (2021). Rvision - Colorblind-Friendly Color Maps for R. R package
+  version 0.6.0.
+
+* Wright ES (2016). “Using DECIPHER v2.0 to Analyze Big Biological Sequence Data in R.” _The R Journal_, *8*(1), 352-359.
